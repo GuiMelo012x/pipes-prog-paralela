@@ -3,7 +3,7 @@
 # Script de benchmark do projeto Pipes
 
 # Configurações
-BIN="./main"                      # binário do teu programa
+BIN="./pipeline"                      # binário do teu programa
 BASELINE_CMD="grep 'ERROR' data.log | grep -v 'DEBUG' | wc -l"  # baseline (exemplo)
 DATA_FILE="data.log"
 RESULTS_FILE="results.csv"
