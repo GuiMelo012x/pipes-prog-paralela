@@ -3,3 +3,10 @@
 127.0.0.1 - - [09/Nov/2025:14:01:01] "GET /api/produto/3 HTTP/1.1" 500
 127.0.0.1 - - [09/Nov/2025:14:02:00] "POST /api/login HTTP/1.1" 500
 127.0.0.1 - - [09/Nov/2025:14:03:00] "GET /api/produto/2 HTTP/1.1" 500
+
+INFO: Inicializando sistema
+ERROR: Falha ao abrir arquivo
+INFO: Usuário logado
+ERROR: Conexão perdida
+INFO: Operação concluída
+ERROR: Timeout na requisição

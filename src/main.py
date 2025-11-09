@@ -1,5 +1,3 @@
-# main.py
-# Orquestra o pipeline usando subprocess e pipes
 import subprocess
 import sys
 from pathlib import Path
@@ -15,10 +13,16 @@ def main():
         print(f"Arquivo {log_file} não existe")
         sys.exit(1)
 
+    # Caminho dos scripts (estão na pasta src)
+    src_dir = Path(__file__).parent  # se main.py estiver em src/, src_dir = src/
+    reader_path = src_dir / "reader.py"
+    filter_path = src_dir / "filter.py"
+    aggregator_path = src_dir / "aggregator.py"
+
     # Cria subprocesses
-    p1 = subprocess.Popen([sys.executable, "reader.py", log_file], stdout=subprocess.PIPE)
-    p2 = subprocess.Popen([sys.executable, "filter.py"], stdin=p1.stdout, stdout=subprocess.PIPE)
-    p3 = subprocess.Popen([sys.executable, "aggregator.py"], stdin=p2.stdout)
+    p1 = subprocess.Popen([sys.executable, str(reader_path), log_file], stdout=subprocess.PIPE)
+    p2 = subprocess.Popen([sys.executable, str(filter_path)], stdin=p1.stdout, stdout=subprocess.PIPE)
+    p3 = subprocess.Popen([sys.executable, str(aggregator_path)], stdin=p2.stdout)
 
     # Fecha pipes no processo pai
     p1.stdout.close()
