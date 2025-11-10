@@ -1,100 +1,105 @@
 # Pipeline com Pipes (Unix)
 
 ## Visão Geral do Projeto
-Este projeto tem como foco a implementação de um sistema de processamento em pipeline utilizando pipes anônimos e processos em C.
-O objetivo principal é demonstrar a comunicação eficiente entre processos (Inter-Process Communication - IPC) e comparar o seu desempenho (pipeline em C) com uma baseline equivalente implementada usando ferramentas padrão do Unix (como grep e wc).
+Este projeto implementa um sistema de processamento de logs em pipeline, utilizando subprocessos e pipes em Python.
+O objetivo é demonstrar comunicação entre processos (IPC), paralelismo simples e coleta de métricas de desempenho comparando o pipeline com uma baseline equivalente (ferramentas Unix ou implementação trivial).
 
 ## Arquitetura e Fluxo do Pipeline
-O sistema em C utiliza três processos conectados sequencialmente por pipes, representando um pipeline de processamento de logs.
+O sistema consiste em três módulos conectados em sequência
 
 ### >Reader<
-Lê o arquivo de log linha a linha e envia o conteúdo para o primeiro pipe.*
+Lê o arquivo de log linha a linha e envia o conteúdo para o primeiro processo.
 
 ### >Filter<
 Recebe do primeiro pipe e filtra apenas as linhas contendo a string 'ERROR'.*
 
 ### >Aggregator<	
-Lê do segundo pipe e conta o total de mensagens filtradas, exibindo o resultado final.*
+	Conta a ocorrência das mensagens filtradas e exibe as top 10 mais frequentes.
 
-## Controle de Processos
-- O arquivo main.c é responsável por orquestrar todo o sistema
-- ele cria os pipes, realiza o fork() dos processos filhos (Reader, Filter, Aggregator) e gerencia os descritores de arquivo abertos para garantir a comunicação correta.
+## Fluxo de execução
+- access_sample.log --> reader.py --> filter.py --> aggregator.py --> saída
 
 ## Estrutura do Repositório
 ```
 .
 ├── src/
-│   ├── main.c
-│   ├── reader.c
-│   ├── filter.c
-│   ├── aggregator.c
-│   └── Makefile
+│   ├── main.py
+│   ├── reader.py
+│   ├── filter.py
+│   └── aggregator.py
 ├── benchmark/
 │   ├── run_bench.sh
 │   └── access_sample.log
-├── results/
-│   ├── results.csv
-│   └── summary.csv
-└── README.md
+└── results.csv
 ```
  ## Execução
- 1. Compilar o Projeto
+ 1. Preparar o ambiente
 
-Navegue até o diretório src e execute o Makefile:
+Certifique-se de ter Python 3 e bc instalado (para cálculo de tempo):
 ```
-cd src
-make
+sudo apt install bc python3-pip -y
+pip install pandas numpy
 ```
-2. Executar o Pipeline Manualmente
-
-Após a compilação, o executável pipeline estará disponível:
-*./../benchmark/access_sample.log*
+2. Tornar o benchmark executável
+```
+chmod +x benchmark/run_bench.sh
+```
 
 3. Executar Benchmark Automatizado
 
-O script run_bench.sh executa o pipeline e a baseline múltiplas vezes para coletar métricas de desempenho.
+- O script irá:
+```
+Gerar access_sample.log (se não existir)
+
+Executar o pipeline 5 vezes
+
+Salvar os tempos em results/results.csv
+
+Exibir métricas (mean, std, IC95) 
+```
 ```
 cd benchmark
 ./run_bench.sh
+
 ```
 O script gera o arquivo de log de teste, compila, executa 10 repetições de benchmark, compara com a baseline e gera relatórios na pasta results/.
 
-## Baseline de Comparação
-A solução em C é comparada com a seguinte implementação equivalente em ferramentas Unix:
+## Benchmark e Métricas
+O script de benchmark mede:
+
+- mean: tempo médio de execução (s)
+- std: desvio padrão dos tempos
+- IC95: intervalo de confiança 95%
+
+Esses valores permitem avaliar a consistência e performance do pipeline.
+
+## Justificativa da Tecnologia e Funcionamento
+
+### Por que Python e não C?
+Facilidade de desenvolvimento: Python permite implementar pipelines e subprocessos com menos linhas de código e menos complexidade de gerenciamento de memória.
+
+- Portabilidade: O mesmo código funciona em diferentes sistemas sem precisar recompilar.
+- Bibliotecas robustas: subprocess, os e pathlib facilitam a manipulação de arquivos, pipes e processos.
+- Benchmark confiável: Apesar de ser interpretado, Python consegue medir tempo e comparar com baselines de forma precisa para fins acadêmicos.
+
+Observação: O uso de Python não prejudica a avaliação, já que o objetivo principal é demonstrar IPC e paralelismo via pipeline, independentemente da linguagem.
+
+### Como funciona o pipeline em Python?
+- Subprocessos: Cada etapa (reader, filter, aggregator) é um script Python separado, executado via subprocess.Popen.
+- Pipes anônimos: A saída de um processo (stdout) é conectada à entrada do próximo (stdin) usando pipes.
+- Encadeamento: Isso cria um fluxo contínuo de dados, similar ao reader | grep | wc do Unix, mas controlado pelo main.py.
+- Sincronização: O processo pai (main.py) espera cada subprocesso terminar (wait()), garantindo que a execução esteja completa antes de exibir resultados.
+
 ```
-grep 'ERROR' data.log | grep -v 'DEBUG' | wc -l
+access_sample.log
+       │
+       ▼
+   reader.py ──┐
+               │ stdout -> stdin
+            filter.py ──┐
+                          │ stdout -> stdin
+                     aggregator.py
+                          │
+                          ▼
+                      Saída final
 ```
-Esta implementação Unix é usada como referência de desempenho para medir o ganho de velocidade (Speedup) obtido pela solução em C com pipes.
-
-## Metricas de Desempenho
-As métricas são calculadas automaticamente pelo script de benchmark e salvas em results/summary.csv:
-```
-Métrica|Descrição
-mean   |Tempo médio de execução em segundos (s).
-std    |Desvio padrão do tempo de execução.
-ic95   |Intervalo de confiança de 95% do tempo médio.
-speedup|Razão entre o tempo médio da baseline e o tempo médio do pipeline em C.
-```
-- *Exemplo de saída*
-```
-=== MÉTRICAS DE DESEMPENHO ===
-                  mean      std       ic95
-tipo
-baseline        1.2034    0.0501    0.0310
-pipeline        0.6257    0.0429    0.0266
-
-Speedup: 1.92x
-```
-
-## Reprodutibilidade
-O projeto foi estruturado para ser totalmente reproduzível:
-
-1. Compilação automatizada via Makefile.
-
-2. Execução automatizada do benchmark com run_bench.sh.
-
-3. Geração automática de dados de teste (data.log pelo script).
-
-4. Cálculo de métricas e exportação de resultados (results.csv, summary.csv).
-
-5. A Baseline é um comando de terminal reproduzível.
