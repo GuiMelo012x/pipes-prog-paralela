@@ -10,3 +10,10 @@ INFO: Usuário logado
 ERROR: Conexão perdida
 INFO: Operação concluída
 ERROR: Timeout na requisição
+
+INFO: Usuário entrou no sistema
+ERROR: Falha na autenticação
+INFO: Usuário saiu
+ERROR: Falha na conexão
+ERROR: Timeout na requisição
+INFO: Sistema finalizado com sucesso
