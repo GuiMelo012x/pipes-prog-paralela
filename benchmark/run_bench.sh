@@ -1,68 +1,73 @@
 #!/bin/bash
-# ============================================================
-# Script de benchmark automatizado - Pipeline vs Baseline (grep+wc)
-# ============================================================
 
-# Configurações
-SRC_DIR="../src"
+# =============================
+# Benchmark automatizado do pipeline
+# =============================
+
+BIN="../src/main.py"
 DATA_FILE="access_sample.log"
 RESULTS_DIR="../results"
 RESULTS_FILE="$RESULTS_DIR/results.csv"
 SUMMARY_FILE="$RESULTS_DIR/summary.csv"
-PYTHON_BIN="python3"
 REPEAT=5
 
-# ============================================================
-# Pré-execução
-# ============================================================
-
-echo "[INFO] Preparando ambiente..."
+# Garante que pasta de resultados exista
 mkdir -p "$RESULTS_DIR"
 
-# Gera log de exemplo se não existir
-if [ ! -f "$DATA_FILE" ]; then
-  echo "[INFO] Gerando $DATA_FILE..."
-  cat << EOF > "$DATA_FILE"
-127.0.0.1 - - [09/Nov/2025:14:00:00] "GET /api/produto/1 HTTP/1.1" 200
-127.0.0.1 - - [09/Nov/2025:14:01:00] "GET /api/produto/2 HTTP/1.1" 500
-127.0.0.1 - - [09/Nov/2025:14:01:01] "GET /api/produto/3 HTTP/1.1" 500
-127.0.0.1 - - [09/Nov/2025:14:02:00] "POST /api/login HTTP/1.1" 500
-127.0.0.1 - - [09/Nov/2025:14:03:00] "GET /api/produto/2 HTTP/1.1" 500
-INFO: Inicializando sistema
-ERROR: Falha ao abrir arquivo
-INFO: Usuário logado
-ERROR: Conexão perdida
-INFO: Operação concluída
-ERROR: Timeout na requisição
-INFO: Usuário entrou no sistema
-ERROR: Falha na autenticação
-INFO: Usuário saiu
-ERROR: Falha na conexão
-ERROR: Timeout na requisição
-INFO: Sistema finalizado com sucesso
-EOF
-fi
-
-# ============================================================
-# Execução principal (Benchmark Python)
-# ============================================================
+# Limpa resultados antigos
+rm -f "$RESULTS_FILE" "$SUMMARY_FILE"
 
 echo "[INFO] Executando benchmark com $REPEAT repetições..."
-$PYTHON_BIN "$SRC_DIR/../benchmark/benchmark.py" > "$RESULTS_DIR/benchmark_output.log" 2>&1
 
-# ============================================================
-# Exibição dos resultados
-# ============================================================
+# Cria CSV base
+echo "tipo,execucao,tempo" > "$RESULTS_FILE"
 
-if [ -f "$SUMMARY_FILE" ]; then
-  echo ""
-  echo "=== RESULTADOS DO BENCHMARK ==="
-  column -s, -t "$SUMMARY_FILE"
-  echo ""
-  echo "Speedup calculado: "
-  grep "Speedup" "$RESULTS_DIR/benchmark_output.log" || echo "Ver arquivo de log em $RESULTS_DIR/benchmark_output.log"
-else
-  echo "[ERRO] Arquivo $SUMMARY_FILE não encontrado."
-  echo "Verifique o log em $RESULTS_DIR/benchmark_output.log"
-fi
-echo "[INFO] Benchmark concluído."
+# === Função auxiliar para medir tempo médio ===
+measure_time() {
+    local tipo=$1
+    local cmd=$2
+
+    for i in $(seq 1 $REPEAT); do
+        START=$(date +%s.%N)
+        eval "$cmd" > /dev/null 2>&1
+        END=$(date +%s.%N)
+        DURATION=$(echo "$END - $START" | bc)
+        echo "$tipo,$i,$DURATION" >> "$RESULTS_FILE"
+    done
+}
+
+# Executa pipeline
+measure_time "pipeline" "python3 $BIN $DATA_FILE"
+
+# Executa baseline (grep + wc -l simulando pipeline em Unix)
+measure_time "baseline" "grep 'ERROR' $DATA_FILE | wc -l"
+
+# Calcula métricas e speedup em Python
+python3 - << EOF
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv("$RESULTS_FILE")
+
+summary = []
+for tipo in df['tipo'].unique():
+    subset = df[df['tipo'] == tipo]['tempo']
+    mean = subset.mean()
+    std = subset.std(ddof=1)
+    ic95 = 1.96 * std / np.sqrt(len(subset))
+    summary.append([tipo, mean, std, ic95])
+
+summary_df = pd.DataFrame(summary, columns=["tipo", "mean", "std", "ic95"])
+summary_df.to_csv("$SUMMARY_FILE", index=False)
+
+# Calcula speedup
+pipeline_mean = summary_df.loc[summary_df['tipo']=="pipeline", 'mean'].values[0]
+baseline_mean = summary_df.loc[summary_df['tipo']=="baseline", 'mean'].values[0]
+speedup = baseline_mean / pipeline_mean
+
+print("\n=== RESULTADOS DO BENCHMARK ===")
+print(summary_df.to_string(index=False))
+print(f"\n Speedup médio (baseline / pipeline): {speedup:.2f}x")
+EOF
+
+echo -e "\n[INFO] Benchmark finalizado. Resultados em $RESULTS_FILE e $SUMMARY_FILE"
