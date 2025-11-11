@@ -117,4 +117,29 @@ access_sample.log
 - Cada processo filho fecha FDs que nÃ£o usa
 - SinalizaÃ§Ã£o explÃ­cita com flag `is_last`
 - Leitura â†’ Processamento â†’ Escrita em ordem determinÃ­stica
-- SIGPIPE ignorado para tratamento graceful
+- SIGPIPE ignorado para tratamento graceful## Benchmark/Comparação (Item 16)
+Para comparar baseline sequencial, pipeline por processos e pipeline com threads utilize o CLI em benchmark/compare.py.
+
+`ash
+# Executa 5 repetições por concorrente e mostra a tabela com tempos e speedup
+python benchmark/compare.py benchmark/access_sample.log --runs 5
+
+# Inclui o top-3 de cada execução para inspeção rápida
+python benchmark/compare.py benchmark/access_sample.log --runs 5 --show-top
+`
+
+A saída segue o formato:
+
+`
+=== COMPARAÇÃO (R=5) ===
+Arquivo: benchmark/access_sample.log
++-----------------+-----------+-----------+-----------+---------+
+| Implementação   |   Média s |   Desv s  |   IC95 s  | Speedup |
++-----------------+-----------+-----------+-----------+---------+
+| Baseline        |    12.345 |     0.210 |     0.184 |   1.00x |
+| Pipes (process) |     2.410 |     0.090 |     0.081 |   5.12x |
+| Threads         |     2.770 |     0.070 |     0.063 |   4.45x |
++-----------------+-----------+-----------+-----------+---------+
+`
+
+Além da tabela impressa, os dados consolidados são adicionados em results/compare_summary.csv.

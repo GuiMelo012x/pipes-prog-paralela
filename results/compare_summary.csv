@@ -1,0 +1,4 @@
+impl,mean_s,sd_s,ci95_s,speedup,runs,filepath,timestamp
+Baseline,0.000780,0.000067,0.000059,1.00,5,C:\Users\mateu\OneDrive\Área de Trabalho\faculdade\programaçao paralela\pipes-prog-paralela\benchmark\access_sample.log,2025-11-11T22:16:19.868662
+Pipes (process),0.529370,0.045471,0.039857,0.00,5,C:\Users\mateu\OneDrive\Área de Trabalho\faculdade\programaçao paralela\pipes-prog-paralela\benchmark\access_sample.log,2025-11-11T22:16:19.868662
+Threads,0.011325,0.006227,0.005458,0.07,5,C:\Users\mateu\OneDrive\Área de Trabalho\faculdade\programaçao paralela\pipes-prog-paralela\benchmark\access_sample.log,2025-11-11T22:16:19.868662
