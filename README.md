@@ -103,3 +103,18 @@ access_sample.log
                           ▼
                       Saída final
 ```
+
+## Perguntas da Banca
+
+### P1: Pipeline bound por CPU, I/O ou sincronização?
+**Resposta**: No caso atual, é **I/O bound** pois os estágios fazem processamento leve (conversão de case, remoção de espaços). Com processamento mais pesado, seria CPU bound.
+
+### P2: Diferença pipes anônimos vs nomeados?
+**Resposta**: Este projeto usa **pipes anônimos** (criados com `pipe()`), que são mais eficientes para processos relacionados (fork). Named pipes (FIFOs) seriam necessários para processos independentes.
+
+### P3: Prevenção de deadlocks?
+**Resposta**: 
+- Cada processo filho fecha FDs que não usa
+- Sinalização explícita com flag `is_last`
+- Leitura → Processamento → Escrita em ordem determinística
+- SIGPIPE ignorado para tratamento graceful
