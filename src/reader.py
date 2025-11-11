@@ -1,5 +1,7 @@
-# reader.py
-# Lê linhas de um arquivo de log e envia para stdout (pipe)
+"""
+reader.py — Lê um arquivo de log e envia o conteúdo linha a linha via pipe (stdout).
+"""
+
 import sys
 
 def main():
@@ -8,10 +10,15 @@ def main():
         sys.exit(1)
 
     log_path = sys.argv[1]
-    with open(log_path, "r") as f:
-        for line in f:
-            sys.stdout.write(line)
-            sys.stdout.flush()  # garante envio imediato pelo pipe
+    try:
+        with open(log_path, "r") as f:
+            for line in f:
+                sys.stdout.write(line)
+                sys.stdout.flush()  # garante envio imediato pelo pipe
+    except FileNotFoundError:
+        print(f"[ERRO] Arquivo '{log_path}' não encontrado.", file=sys.stderr)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

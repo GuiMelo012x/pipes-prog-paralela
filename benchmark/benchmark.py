@@ -1,84 +1,78 @@
-# benchmark.py
 import subprocess
 import time
-import csv
-import os
-import numpy as np
+import statistics
+import pandas as pd
+from pathlib import Path
 
-# Configurações
-DATA_FILE = "data.log"
-RESULTS_FILE = "results.csv"
-SUMMARY_FILE = "summary.csv"
-REPEAT = 5
-LINES = 100000  # total de linhas do log
-PIPELINE_CMD = ["python3", "main.py", DATA_FILE]  # comando do pipeline
+RESULTS_DIR = Path("../results")
+LOG_FILE = Path("access_sample.log")
+PIPELINE_CMD = "python3 ../src/main.py"
+BASELINE_CMD = f'grep "ERROR" {LOG_FILE} | wc -l'
 
-# Gerar arquivo de teste se não existir
-if not os.path.exists(DATA_FILE):
-    print(f"[INFO] Gerando {DATA_FILE} com {LINES} linhas...")
-    with open(DATA_FILE, "w") as f:
-        for i in range(1, LINES + 1):
-            f.write(f"INFO: Linha {i}\n")
-            if i % 100 == 0:
-                f.write(f"ERROR: Falha simulada {i}\n")
+RUNS = 5
 
-# Função para medir tempo de execução
-def measure_time(cmd):
-    start = time.time()
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    end = time.time()
+def run_pipeline():
+    start = time.perf_counter()
+    subprocess.run(PIPELINE_CMD, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    end = time.perf_counter()
     return end - start
 
-# Função baseline Unix via Python
-def measure_baseline(file):
-    start = time.time()
-    # equivalente ao grep 'ERROR' | wc -l
-    count = subprocess.run(
-        f"grep 'ERROR' {file} | wc -l",
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    end = time.time()
+def run_baseline():
+    start = time.perf_counter()
+    subprocess.run(BASELINE_CMD, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    end = time.perf_counter()
     return end - start
 
-# Executar benchmark
-print(f"[INFO] Executando benchmark {REPEAT} vezes...")
-results = []
+def benchmark_pipeline(runs=RUNS):
+    print(f"\nExecutando pipeline ({runs} repetições)...")
+    times = [run_pipeline() for _ in range(runs)]
+    mean = statistics.mean(times)
+    stdev = statistics.stdev(times)
+    return mean, stdev, times
 
-for i in range(1, REPEAT + 1):
-    t_pipeline = measure_time(PIPELINE_CMD)
-    t_baseline = measure_baseline(DATA_FILE)
-    results.append(("pipeline", i, t_pipeline))
-    results.append(("baseline", i, t_baseline))
+def benchmark_baseline(runs=RUNS):
+    print(f"\nExecutando baseline grep+wc ({runs} repetições)...")
+    times = [run_baseline() for _ in range(runs)]
+    mean = statistics.mean(times)
+    stdev = statistics.stdev(times)
+    return mean, stdev, times
 
-# Salvar resultados em CSV
-with open(RESULTS_FILE, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["tipo", "execucao", "tempo"])
-    writer.writerows(results)
+def save_results(pipeline_stats, baseline_stats):
+    RESULTS_DIR.mkdir(exist_ok=True)
 
-# Calcular métricas
-results_np = {}
-for tipo in ["pipeline", "baseline"]:
-    tempos = [r[2] for r in results if r[0] == tipo]
-    mean = np.mean(tempos)
-    std = np.std(tempos, ddof=1)
-    ic95 = 1.96 * std / np.sqrt(len(tempos))
-    results_np[tipo] = {"mean": mean, "std": std, "ic95": ic95}
+    df = pd.DataFrame({
+        "run": range(1, RUNS + 1),
+        "pipeline_time": pipeline_stats[2],
+        "baseline_time": baseline_stats[2],
+    })
+    df.to_csv(RESULTS_DIR / "results.csv", index=False)
 
-speedup = results_np["baseline"]["mean"] / results_np["pipeline"]["mean"]
+    summary = pd.DataFrame([{
+        "pipeline_mean": pipeline_stats[0],
+        "pipeline_std": pipeline_stats[1],
+        "baseline_mean": baseline_stats[0],
+        "baseline_std": baseline_stats[1],
+        "speedup": baseline_stats[0] / pipeline_stats[0],
+    }])
+    summary.to_csv(RESULTS_DIR / "summary.csv", index=False)
 
-# Salvar summary em CSV
-with open(SUMMARY_FILE, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["tipo", "mean", "std", "ic95"])
-    for tipo, metrics in results_np.items():
-        writer.writerow([tipo, metrics["mean"], metrics["std"], metrics["ic95"]])
+def main():
+    if not LOG_FILE.exists():
+        print("Arquivo de log não encontrado. Gerando arquivo de teste...")
+        with open(LOG_FILE, "w") as f:
+            for i in range(10000):
+                level = "ERROR" if i % 5 == 0 else "INFO"
+                f.write(f"{level}: Mensagem número {i}\n")
 
-# Mostrar métricas
-print("\n=== MÉTRICAS DE DESEMPENHO ===")
-for tipo, metrics in results_np.items():
-    print(f"{tipo}: mean={metrics['mean']:.6f}s, std={metrics['std']:.6f}s, ic95={metrics['ic95']:.6f}s")
-print(f"\nSpeedup: {speedup:.2f}x")
-print(f"\nResultados salvos em {RESULTS_FILE} e {SUMMARY_FILE}")
+    pipeline_stats = benchmark_pipeline()
+    baseline_stats = benchmark_baseline()
+
+    save_results(pipeline_stats, baseline_stats)
+
+    print("\nResultados:")
+    print(f"Pipeline: {pipeline_stats[0]:.4f}s ± {pipeline_stats[1]:.4f}")
+    print(f"Baseline (grep+wc): {baseline_stats[0]:.4f}s ± {baseline_stats[1]:.4f}")
+    print(f"Speedup: {baseline_stats[0] / pipeline_stats[0]:.2f}x")
+
+if __name__ == "__main__":
+    main()

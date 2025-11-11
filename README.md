@@ -28,9 +28,13 @@ Recebe do primeiro pipe e filtra apenas as linhas contendo a string 'ERROR'.*
 │   ├── filter.py
 │   └── aggregator.py
 ├── benchmark/
+│   ├── benchmark.py
 │   ├── run_bench.sh
 │   └── access_sample.log
-└── results.csv
+├── results/
+│   ├── results.csv
+│   └── summary.csv
+└── README.md
 ```
  ## Execução
  1. Preparar o ambiente
