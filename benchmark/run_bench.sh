@@ -1,77 +1,68 @@
-import subprocess
-import time
-import csv
-import os
-import numpy as np
+#!/bin/bash
+# ============================================================
+# Script de benchmark automatizado - Pipeline vs Baseline (grep+wc)
+# ============================================================
 
-DATA_FILE = "data.log"
-RESULTS_FILE = "../results/results.csv"
-SUMMARY_FILE = "../results/summary.csv"
-REPEAT = 5
-LINES = 100000
-PIPELINE_CMD = ["python3", "../src/main.py", DATA_FILE]
+# Configurações
+SRC_DIR="../src"
+DATA_FILE="access_sample.log"
+RESULTS_DIR="../results"
+RESULTS_FILE="$RESULTS_DIR/results.csv"
+SUMMARY_FILE="$RESULTS_DIR/summary.csv"
+PYTHON_BIN="python3"
+REPEAT=5
 
-os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
+# ============================================================
+# Pré-execução
+# ============================================================
 
-# Gerar arquivo de teste se não existir
-if not os.path.exists(DATA_FILE):
-    print(f"[INFO] Gerando {DATA_FILE} com {LINES} linhas...")
-    with open(DATA_FILE, "w") as f:
-        for i in range(1, LINES + 1):
-            f.write(f"INFO: Linha {i}\n")
-            if i % 100 == 0:
-                f.write(f"ERROR: Falha simulada {i}\n")
+echo "[INFO] Preparando ambiente..."
+mkdir -p "$RESULTS_DIR"
 
-def measure_time(cmd):
-    start = time.perf_counter()
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    end = time.perf_counter()
-    return end - start
+# Gera log de exemplo se não existir
+if [ ! -f "$DATA_FILE" ]; then
+  echo "[INFO] Gerando $DATA_FILE..."
+  cat << EOF > "$DATA_FILE"
+127.0.0.1 - - [09/Nov/2025:14:00:00] "GET /api/produto/1 HTTP/1.1" 200
+127.0.0.1 - - [09/Nov/2025:14:01:00] "GET /api/produto/2 HTTP/1.1" 500
+127.0.0.1 - - [09/Nov/2025:14:01:01] "GET /api/produto/3 HTTP/1.1" 500
+127.0.0.1 - - [09/Nov/2025:14:02:00] "POST /api/login HTTP/1.1" 500
+127.0.0.1 - - [09/Nov/2025:14:03:00] "GET /api/produto/2 HTTP/1.1" 500
+INFO: Inicializando sistema
+ERROR: Falha ao abrir arquivo
+INFO: Usuário logado
+ERROR: Conexão perdida
+INFO: Operação concluída
+ERROR: Timeout na requisição
+INFO: Usuário entrou no sistema
+ERROR: Falha na autenticação
+INFO: Usuário saiu
+ERROR: Falha na conexão
+ERROR: Timeout na requisição
+INFO: Sistema finalizado com sucesso
+EOF
+fi
 
-def measure_baseline(file):
-    start = time.perf_counter()
-    subprocess.run(
-        f"grep 'ERROR' {file} | wc -l",
-        shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-    )
-    end = time.perf_counter()
-    return end - start
+# ============================================================
+# Execução principal (Benchmark Python)
+# ============================================================
 
-print(f"[INFO] Executando benchmark {REPEAT} vezes...")
-results = []
+echo "[INFO] Executando benchmark com $REPEAT repetições..."
+$PYTHON_BIN "$SRC_DIR/../benchmark/benchmark.py" > "$RESULTS_DIR/benchmark_output.log" 2>&1
 
-for i in range(1, REPEAT + 1):
-    t_pipeline = measure_time(PIPELINE_CMD)
-    t_baseline = measure_baseline(DATA_FILE)
-    results.append(("pipeline", i, t_pipeline))
-    results.append(("baseline", i, t_baseline))
+# ============================================================
+# Exibição dos resultados
+# ============================================================
 
-# CSV results
-with open(RESULTS_FILE, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["tipo", "execucao", "tempo"])
-    writer.writerows(results)
-
-# Métricas
-results_np = {}
-for tipo in ["pipeline", "baseline"]:
-    tempos = [r[2] for r in results if r[0] == tipo]
-    mean = np.mean(tempos)
-    std = np.std(tempos, ddof=1)
-    ic95 = 1.96 * std / np.sqrt(len(tempos))
-    results_np[tipo] = {"mean": mean, "std": std, "ic95": ic95}
-
-speedup = results_np["baseline"]["mean"] / results_np["pipeline"]["mean"]
-
-# Summary CSV
-with open(SUMMARY_FILE, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["tipo", "mean", "std", "ic95"])
-    for tipo, m in results_np.items():
-        writer.writerow([tipo, m["mean"], m["std"], m["ic95"]])
-
-print("\n=== MÉTRICAS DE DESEMPENHO ===")
-for tipo, m in results_np.items():
-    print(f"{tipo}: mean={m['mean']:.6f}s, std={m['std']:.6f}s, ic95={m['ic95']:.6f}s")
-print(f"\nSpeedup: {speedup:.2f}x")
-print(f"\nResultados salvos em {RESULTS_FILE} e {SUMMARY_FILE}")
+if [ -f "$SUMMARY_FILE" ]; then
+  echo ""
+  echo "=== RESULTADOS DO BENCHMARK ==="
+  column -s, -t "$SUMMARY_FILE"
+  echo ""
+  echo "Speedup calculado: "
+  grep "Speedup" "$RESULTS_DIR/benchmark_output.log" || echo "Ver arquivo de log em $RESULTS_DIR/benchmark_output.log"
+else
+  echo "[ERRO] Arquivo $SUMMARY_FILE não encontrado."
+  echo "Verifique o log em $RESULTS_DIR/benchmark_output.log"
+fi
+echo "[INFO] Benchmark concluído."
