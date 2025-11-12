@@ -122,3 +122,22 @@ access_sample.log
 - Sinalização explícita com flag `is_last`
 - Leitura → Processamento → Escrita em ordem determinística
 - SIGPIPE ignorado para tratamento graceful
+
+### P1 geral: Qual o baseline e quais ganhos absolutos e relativos obtidos? Descreva a metodologia do teste, tamanho de amostra e variância.
+- Baseline: grep "ERROR" access_sample.log | wc -l, utilizando pipes nativos do sistema operacional (implementação em C).
+Metodologia: foram realizadas 5 repetições independentes de cada execução, medindo o tempo total com time.perf_counter().
+Métricas analisadas: média, desvio-padrão, intervalo de confiança de 95% e speedup.
+- Resultados:
+
+Pipeline (Python): 0.0415s ± 0.0036
+
+Baseline (Shell): 0.0034s ± 0.0005
+
+Speedup: 0.08x (o pipeline é ~12x mais lento).
+
+- Interpretação: o baseline é significativamente mais rápido, pois usa processos nativos otimizados em C. O pipeline em Python reproduz o mesmo comportamento de fluxo, mas com maior overhead interpretado.
+
+### P4 geral: Onde está o gargalo dominante hoje? Qual mudança única traria o maior ganho marginal e por quê?
+- Gargalo dominante: a principal limitação de desempenho está na comunicação entre processos Python via pipes (os.pipe() / multiprocessing), que exige serialização e cópia de dados em memória. Esse overhead é alto em comparação com os pipes nativos do SO (implementados em C).
+
+- Maior ganho marginal: reescrever o pipeline usando módulos nativos de C (ex: Cython) ou integração direta com comandos shell via subprocess reduziria drasticamente o overhead. Outra alternativa seria usar threads em vez de processos, quando não houver limitação de GIL, para eliminar custos de IPC.
