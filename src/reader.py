@@ -1,24 +1,37 @@
-"""
-reader.py — Lê um arquivo de log e envia o conteúdo linha a linha via pipe (stdout).
-"""
+import os
 
-import sys
+def read_log(log_path, max_size_mb=50):
+    """
+    Lê o arquivo de log e retorna suas linhas.
+    Inclui verificações de segurança e tratamento de erro.
+    """
 
-def main():
-    if len(sys.argv) != 2:
-        print(f"Uso: {sys.argv[0]} <arquivo_log>")
-        sys.exit(1)
-
-    log_path = sys.argv[1]
     try:
-        with open(log_path, "r") as f:
-            for line in f:
-                sys.stdout.write(line)
-                sys.stdout.flush()  # garante envio imediato pelo pipe
-    except FileNotFoundError:
-        print(f"[ERRO] Arquivo '{log_path}' não encontrado.", file=sys.stderr)
-        sys.exit(1)
+        # Verifica se o arquivo existe
+        if not os.path.exists(log_path):
+            raise FileNotFoundError(f"Arquivo '{log_path}' não encontrado.")
 
+        # Verifica tamanho máximo permitido (ex: 50MB)
+        size_mb = os.path.getsize(log_path) / (1024 * 1024)
+        if size_mb > max_size_mb:
+            raise MemoryError(
+                f"O arquivo '{log_path}' tem {size_mb:.1f}MB, excedendo o limite de {max_size_mb}MB."
+            )
 
-if __name__ == "__main__":
-    main()
+        # Abre com tratamento de encoding e ignora erros de caracteres
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as file:
+            lines = file.readlines()
+
+        # Caso o arquivo esteja vazio
+        if not lines:
+            raise ValueError(f"O arquivo '{log_path}' está vazio.")
+
+        return lines
+
+    except (FileNotFoundError, MemoryError, ValueError) as e:
+        print(f"[ERRO] {e}")
+        return []
+
+    except Exception as e:
+        print(f"[ERRO INESPERADO] Falha ao ler o arquivo: {e}")
+        return []
